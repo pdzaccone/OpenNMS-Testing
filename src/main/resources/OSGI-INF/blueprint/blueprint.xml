@@ -10,8 +10,9 @@
 		http://aries.apache.org/schemas/blueprint-ext/blueprint-ext-1.1.xsd
 ">
 
-    <bean id="timeSeriesStorageInMemory" class="org.opennms.timeseries.impl.memory.InMemoryStorage" />
-    <service ref="timeSeriesStorageInMemory" interface="org.opennms.integration.api.v1.timeseries.TimeSeriesStorage">
+    <bean id="timeSeriesStorage" class="org.opennms.timeseries.impl.memory.InMemoryStorage"/>
+    <service ref="timeSeriesStorage" interface="org.opennms.timeseries.impl.memory.InMemoryStorage" />
+    <service ref="timeSeriesStorage" interface="org.opennms.integration.api.v1.timeseries.TimeSeriesStorage">
         <service-properties>
             <entry key="registration.export" value="true" />
         </service-properties>

@@ -43,6 +43,8 @@ import org.opennms.integration.api.v1.timeseries.Tag;
 import org.opennms.integration.api.v1.timeseries.TimeSeriesFetchRequest;
 import org.opennms.integration.api.v1.timeseries.TimeSeriesStorage;
 
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
@@ -53,6 +55,9 @@ import com.google.common.cache.CacheBuilder;
 public class InMemoryStorage implements TimeSeriesStorage {
 
     private final ConcurrentMap<Metric, Collection<Sample>> data;
+
+    private final MetricRegistry metrics = new MetricRegistry();
+    private final Meter samplesWritten = metrics.meter("samplesWritten");
 
     public InMemoryStorage () {
         Cache<Metric, Collection<Sample>> cache = CacheBuilder.newBuilder().maximumSize(10000).build();
@@ -66,6 +71,7 @@ public class InMemoryStorage implements TimeSeriesStorage {
             Collection<Sample> timeseries = data.computeIfAbsent(sample.getMetric(), k -> new ConcurrentLinkedQueue<>());
             timeseries.add(sample);
         }
+        samplesWritten.mark(samples.size());
     }
 
     @Override
@@ -108,5 +114,9 @@ public class InMemoryStorage implements TimeSeriesStorage {
     @Override
     public String toString() {
         return this.getClass().getName();
+    }
+
+    public MetricRegistry getMetrics() {
+        return metrics;
     }
 }
