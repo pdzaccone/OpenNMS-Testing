@@ -28,8 +28,8 @@
 
 package org.opennms.timeseries.impl.memory;
 
+import org.opennms.integration.api.v1.timeseries.AbstractStorageIntegrationTest;
 import org.opennms.integration.api.v1.timeseries.TimeSeriesStorage;
-import org.opennms.timeseries.plugintest.AbstractStorageIntegrationTest;
 
 public class InMemoryStorageTest extends AbstractStorageIntegrationTest {
 
