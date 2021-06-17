@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -50,8 +51,6 @@ import org.opennms.integration.api.v1.timeseries.TimeSeriesStorage;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 
 /**
  * Simulates a time series storage in memory (Guava cache). The implementation is super simple and not very efficient.
@@ -65,8 +64,7 @@ public class InMemoryStorage implements TimeSeriesStorage {
     private final Meter samplesWritten = metrics.meter("samplesWritten");
 
     public InMemoryStorage () {
-        Cache<Metric, Collection<Sample>> cache = CacheBuilder.newBuilder().maximumSize(10000).build();
-        data = cache.asMap();
+        data = new ConcurrentHashMap<>();
 
         ConsoleReporter reporter = ConsoleReporter.forRegistry(this.getMetrics())
                 .convertRatesTo(TimeUnit.SECONDS)
