@@ -1,4 +1,4 @@
-# Time Series Storage - InMemory
+# Time Series Storage - InMemory [![CircleCI](https://circleci.com/gh/opennms-forge/opennms-tss-plugin-inmemory.svg?style=svg)](https://circleci.com/gh/opennms-forge/opennms-tss-plugin-inmemory)
 
 This plugin exposes a simple implementation of the TimeSeriesStorage interface.
 It holds the data in a Guava cache.
