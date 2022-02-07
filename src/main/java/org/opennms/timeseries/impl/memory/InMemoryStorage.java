@@ -28,16 +28,8 @@
 
 package org.opennms.timeseries.impl.memory;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
+import java.sql.*;
+import java.util.*;
 
 import org.opennms.integration.api.v1.timeseries.Aggregation;
 import org.opennms.integration.api.v1.timeseries.Metric;
@@ -56,35 +48,71 @@ import com.codahale.metrics.MetricRegistry;
  */
 public class InMemoryStorage implements TimeSeriesStorage {
 
-    private final ConcurrentMap<Metric, Collection<Sample>> data;
-
     private final MetricRegistry metrics = new MetricRegistry();
     private final Meter samplesWritten = metrics.meter("samplesWritten");
-
-    public InMemoryStorage () {
-        data = new ConcurrentHashMap<>();
-    }
 
     @Override
     public void store(final List<Sample> samples) {
         Objects.requireNonNull(samples);
-        for(Sample sample : samples) {
-            Collection<Sample> timeseries = data.computeIfAbsent(sample.getMetric(), k -> new ConcurrentLinkedQueue<>());
-            timeseries.add(sample);
+        Connection conn = null;
+        try {
+            conn = DbConnectionPoolingManager.getConnection();
+            int count = 0;
+
+            for (Sample sample : samples) {
+                String query = "INSERT INTO TimeSeries (Metric, Sample) VALUES (?, ?)";
+                PreparedStatement statement = conn.prepareStatement(query);
+                statement.setObject(1, sample.getMetric());
+                statement.setObject(2, sample);
+                statement.addBatch();
+
+                count++;
+                if (count % 100 == 0 || count == samples.size()) {
+                    statement.executeBatch();
+                }
+            }
+            samplesWritten.mark(samples.size());
+        } catch (SQLException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                DbConnectionPoolingManager.releaseConnection(conn);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
-        samplesWritten.mark(samples.size());
     }
 
     @Override
     public List<Metric> findMetrics(Collection<TagMatcher> tagMatchers) {
         Objects.requireNonNull(tagMatchers);
-        if(tagMatchers.isEmpty()) {
+        List<Metric> results = new ArrayList<>();
+        if (tagMatchers.isEmpty()) {
             throw new IllegalArgumentException("We expect at least one TagMatcher but none was given.");
         }
-        return data.keySet()
-                .stream()
-                .filter(metric -> this.matches(tagMatchers, metric))
-                .collect(Collectors.toList());
+        Connection conn = null;
+        try {
+            conn = DbConnectionPoolingManager.getConnection();
+            String query = "SELECT DISTINCT Metric FROM TimeSeries";
+            Statement statement = conn.createStatement();
+            ResultSet queryRes = statement.executeQuery(query);
+            while (queryRes.next()) {
+                Metric metric = (Metric) queryRes.getObject("Metric");
+                if (this.matches(tagMatchers, metric)) {
+                    results.add(metric);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        finally {
+            try {
+                DbConnectionPoolingManager.releaseConnection(conn);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return results;
     }
 
     /** Each matcher must be matched by at least one tag. */
@@ -92,8 +120,8 @@ public class InMemoryStorage implements TimeSeriesStorage {
         final Set<Tag> searchableTags = new HashSet<>(metric.getIntrinsicTags());
         searchableTags.addAll(metric.getMetaTags());
 
-        for(TagMatcher matcher : matchers) {
-            if(searchableTags.stream().noneMatch(t -> this.matches(matcher, t))) {
+        for (TagMatcher matcher : matchers) {
+            if (searchableTags.stream().noneMatch(t -> this.matches(matcher, t))) {
                 return false; // this TagMatcher didn't find any matching tag => this Metric is not part of search result;
             }
         }
@@ -102,12 +130,12 @@ public class InMemoryStorage implements TimeSeriesStorage {
 
     private boolean matches(final TagMatcher matcher, final Tag tag) {
 
-        if(!matcher.getKey().equals(tag.getKey())) {
+        if (!matcher.getKey().equals(tag.getKey())) {
             return false; // not even the key matches => we are done.
         }
 
         // Tags have always a non null value so we don't have to null check for them.
-        if(TagMatcher.Type.EQUALS == matcher.getType()) {
+        if (TagMatcher.Type.EQUALS == matcher.getType()) {
             return tag.getValue().equals(matcher.getValue());
         } else if (TagMatcher.Type.NOT_EQUALS == matcher.getType()) {
             return !tag.getValue().equals(matcher.getValue());
@@ -123,23 +151,57 @@ public class InMemoryStorage implements TimeSeriesStorage {
     @Override
     public List<Sample> getTimeseries(TimeSeriesFetchRequest request) {
         Objects.requireNonNull(request);
-        if(request.getAggregation() != Aggregation.NONE) {
+        List<Sample> results = new ArrayList<>();
+        if (request.getAggregation() != Aggregation.NONE) {
             throw new IllegalArgumentException(String.format("Aggregation %s is not supported.", request.getAggregation()));
         }
 
-        if(!data.containsKey(request.getMetric())){
-            return Collections.emptyList();
+        Connection conn = null;
+        try {
+            conn = DbConnectionPoolingManager.getConnection();
+            String query = "SELECT Metric, Sample FROM TimeSeries WHERE Metric = ?";
+            PreparedStatement statement = conn.prepareStatement(query);
+            statement.setObject(1, request.getMetric());
+            ResultSet queryRes = statement.executeQuery();
+            while (queryRes.next()) {
+                Sample sample = (Sample) queryRes.getObject("Sample");
+                if (sample.getTime().isAfter(request.getStart()) && sample.getTime().isBefore(request.getEnd())) {
+                    results.add(sample);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
-        return data.get(request.getMetric()).stream()
-                .filter(sample -> sample.getTime().isAfter(request.getStart()))
-                .filter(sample -> sample.getTime().isBefore(request.getEnd()))
-                .collect(Collectors.toList());
+        finally {
+            try {
+                DbConnectionPoolingManager.releaseConnection(conn);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return results;
     }
 
     @Override
     public void delete(Metric metric) {
         Objects.requireNonNull(metric);
-        this.data.remove(metric);
+        Connection conn = null;
+        try {
+            conn = DbConnectionPoolingManager.getConnection();
+            String query = "DELETE FROM TimeSeries WHERE Metric = ?";
+            PreparedStatement statement = conn.prepareStatement(query);
+            statement.setObject(1, metric);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        finally {
+            try {
+                DbConnectionPoolingManager.releaseConnection(conn);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
