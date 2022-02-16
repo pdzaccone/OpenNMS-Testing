@@ -115,7 +115,8 @@ public class InMemoryStorage implements TimeSeriesStorage {
             conn = this.dbManager.getConnection();
             int idMetric = this.dbManager.findMetric(conn, request.getMetric());
             if (idMetric != -1) {
-                List<Sample> samples = this.dbManager.findSamplesForMetric(conn, request.getMetric(), idMetric);
+                Metric metric = this.dbManager.findMetric(conn, request.getMetric().getKey());
+                List<Sample> samples = this.dbManager.findSamplesForMetric(conn, metric, idMetric);
                 results = samples.stream().filter(val -> (val.getTime().isAfter(request.getStart()) && val.getTime().isBefore(request.getEnd()))).collect(Collectors.toList());
             }
         } catch (SQLException e) {

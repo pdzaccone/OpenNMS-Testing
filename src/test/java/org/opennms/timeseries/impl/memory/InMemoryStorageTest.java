@@ -28,28 +28,45 @@
 
 package org.opennms.timeseries.impl.memory;
 
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.core.DefaultDockerClientConfig;
+import com.github.dockerjava.core.DockerClientBuilder;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.opennms.integration.api.v1.timeseries.AbstractStorageIntegrationTest;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.sql.SQLException;
+import java.time.Duration;
+import org.slf4j.Logger;
+import org.testcontainers.utility.DockerImageName;
 
 public class InMemoryStorageTest extends AbstractStorageIntegrationTest {
 
     public static GenericContainer<?> container = null;
+    private static Logger logger;
 
     private InMemoryStorage storage = null;
 
     @BeforeClass
     public static void setUpContainer() {
-//        container = new GenericContainer<>("inMemoryStorage/inMemoryStorageDB:latest-pg12")
+//        DockerClient dockerClient = DockerClientBuilder.getInstance().build();
+//        List<Container> containers = dockerClient.listContainersCmd().exec();
+//        for (Container con : containers) {
+//            System.out.println(con.getNames());
+//        }
+//        container = new GenericContainer<>(DockerImageName.parse("postgres"))
 //                .withExposedPorts(5432)
 //                .withEnv("POSTGRES_PASSWORD", "password")
 //                .withEnv("TIMESCALEDB_TELEMETRY", "off")
-//                .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofSeconds(60)));
+//                .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofSeconds(60)))
+//                .withLogConsumer(new Slf4jLogConsumer(logger));
+//
 //        container.start();
     }
 

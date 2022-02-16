@@ -197,6 +197,27 @@ public class DbManager {
         return result;
     }
 
+    public Metric findMetric(Connection conn, String metricKey) {
+        Objects.requireNonNull(conn);
+        Objects.requireNonNull(metricKey);
+        Metric result = null;
+        try {
+            PreparedStatement statement = conn.prepareStatement(getMetricSearchQueryAll());
+            statement.setString(1, metricKey);
+            ResultSet resultSet = statement.executeQuery();
+            if (resultSet.next()) {
+                ImmutableMetric.MetricBuilder mBuilder = new ImmutableMetric.MetricBuilder();
+                mBuilder.intrinsicTags(convertStringToSet(resultSet.getString(3)));
+                mBuilder.metaTags(convertStringToSet(resultSet.getString(4)));
+                mBuilder.externalTags(convertStringToSet(resultSet.getString(5)));
+                result = mBuilder.build();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
+
     public List<Metric> findAllMetrics(Connection conn) {
         Objects.requireNonNull(conn);
         List<Metric> result = new ArrayList<>();
@@ -343,6 +364,10 @@ public class DbManager {
         return "SELECT id FROM " + TABLENAME_METRICS + " WHERE key = ?";
     }
 
+    private String getMetricSearchQueryAll() {
+        return "SELECT * FROM " + TABLENAME_METRICS + " WHERE key = ?";
+    }
+
     private String getMetricSearchQueryNoParams() {
         return "SELECT * FROM " + TABLENAME_METRICS;
     }
@@ -391,9 +416,8 @@ public class DbManager {
 
     private boolean isDatabaseTableFound(Connection conn, String tableName) {
         Objects.requireNonNull(conn);
-        DatabaseMetaData metaData = null;
         try {
-            metaData = conn.getMetaData();
+            DatabaseMetaData metaData = conn.getMetaData();
             ResultSet tables = metaData.getTables(null, null, tableName, null);
             ResultSet tables1 = metaData.getTables(null, null, tableName.toLowerCase(Locale.ROOT), null);
             return tables.next() || tables1.next();
